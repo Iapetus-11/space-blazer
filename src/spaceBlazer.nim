@@ -9,9 +9,10 @@ type
         sprite: Sprite
         rotationSpeed: float
 
-    AsteroidExplosion = ref object
+    EnemyShip = ref object
         sprite: Sprite
-        stage: int
+        health: int
+        cooldown: int
 
 const
     BACKGROUND_COLOR = color(30, 30, 40)
@@ -63,15 +64,18 @@ music.volume = 0
 proc hash(a: AsteroidSprite): Hash =
     return hash(a.sprite)
 
+proc hash(e: EnemyShip): Hash =
+    return hash(e.sprite)
+
 proc newBullet(ship: Sprite): Sprite =
     result = newSprite(bulletTexture)
     result.origin = vec2(0, bulletSize.y/2)
     result.position = vec2(ship.position.x+35, ship.position.y-1.5)
 
-proc newEnemyBullet(ship: Sprite): Sprite =
+proc newEnemyBullet(ship: EnemyShip): Sprite =
     result = newSprite(enemyBulletTexture)
     result.origin = vec2(0, enemyBulletSize.y/2)
-    result.position = vec2(ship.position.x-35, ship.position.y)
+    result.position = vec2(ship.sprite.position.x-35, ship.sprite.position.y)
 
 proc newAsteroid(): AsteroidSprite =
     let sprite = newSprite(asteroidTexture)
@@ -79,6 +83,10 @@ proc newAsteroid(): AsteroidSprite =
     sprite.origin = vec2(asteroidSize.x / 2, asteroidSize.y / 2)
     sprite.rotation = rand(360).cfloat
     sprite.position = vec2(WINDOW_X+asteroidSize.x, rand(WINDOW_Y - (asteroidSize.y * 2))+asteroidSize.y)
+    
+    let scale = rand(1) / 1 + 1
+
+    sprite.scale = vec2(scale, scale)
 
     return AsteroidSprite(sprite: sprite, rotationSpeed: rand(4) / 4)
 
@@ -88,11 +96,11 @@ proc newHealthPickup(): Sprite =
     result.origin = vec2(healthPickupSize.x / 2, healthPickupSize.y / 2)
     result.position = vec2(WINDOW_X+healthPickupSize.x, rand(WINDOW_Y - (healthPickupSize.y * 2))+healthPickupSize.y)
 
-proc newEnemyShip(): Sprite =
-    result = newSprite(enemyShipTexture)
+proc newEnemyShip(): EnemyShip =
+    result = EnemyShip(sprite: newSprite(enemyShipTexture), health: 5, cooldown: 50)
 
-    result.origin = vec2(enemyShipSize.x / 2, enemyShipSize.y / 2)
-    result.position = vec2(WINDOW_X+enemyShipSize.x, rand(WINDOW_Y - (enemyShipSize.y * 2))+enemyShipSize.y)
+    result.sprite.origin = vec2(enemyShipSize.x / 2, enemyShipSize.y / 2)
+    result.sprite.position = vec2(WINDOW_X+enemyShipSize.x, rand(WINDOW_Y - (enemyShipSize.y * 2))+enemyShipSize.y)
 
 proc drawSprites(window: RenderWindow, sprites: seq[Sprite]) =
     for s in sprites:
@@ -156,6 +164,10 @@ proc drawShip(window: RenderWindow, ship: Sprite, eS: Sprite, eL: Sprite, moving
     else:
         eS.position = vec2(ship.position.x-25, ship.position.y)
         window.draw(eS)
+
+proc drawEnemyShips(window: RenderWindow, ships: seq[EnemyShip]) =
+    for ship in ships:
+        window.draw(ship.sprite)
         
 proc pBulletOverlapsAsteroid(bullet: Sprite, asteroid: AsteroidSprite): bool =
     let
@@ -172,6 +184,25 @@ proc pBulletOverlapsAsteroid(bullet: Sprite, asteroid: AsteroidSprite): bool =
     result = aGlobalBounds.intersects(bGlobalBounds, intersection)
     
     sprite.rotation = oldRot
+
+proc pShipOverlapsEnemyBullet(ship: Sprite, enemyBullet: Sprite): bool =
+    let oldRot = enemyBullet.rotation
+
+    enemyBullet.rotation = 0
+
+    var
+        sGlobalBounds: FloatRect = ship.globalBounds
+        aGlobalBounds: FloatRect = enemyBullet.globalBounds
+        intersection: FloatRect = rect(1.0, 1.0, 1.0, 1.0)
+
+    sGlobalBounds.width -= 12
+    sGlobalBounds.left += 6
+    sGlobalBounds.height -= 12
+    sGlobalBounds.top += 6
+
+    result = aGlobalBounds.intersects(sGlobalBounds, intersection)
+    
+    enemyBullet.rotation = oldRot
 
 proc pShipOverlapsAsteroid(ship: Sprite, asteroid: AsteroidSprite): bool =
     let
@@ -202,6 +233,14 @@ proc pShipOverlapsHealthPickup(ship: Sprite, healthPickup: Sprite): bool =
 
     result = hGlobalBounds.intersects(sGlobalBounds, intersection)
 
+proc pBulletOverlapsEnemy(bullet: Sprite, enemyShip: EnemyShip): bool =
+    var
+        bGlobalBounds: FloatRect = bullet.globalBounds
+        eGlobalBounds: FloatRect = enemyShip.sprite.globalBounds
+        intersection: FloatRect = rect(1.0, 1.0, 1.0, 1.0)
+
+    result = bGlobalBounds.intersects(eGlobalBounds, intersection)
+
 var
     ship = newSprite(shipTexture)
 
@@ -214,7 +253,7 @@ var
     bullets: seq[Sprite]
     asteroids: seq[AsteroidSprite]
     healthPickups: seq[Sprite]
-    enemyShips: seq[Sprite]
+    enemyShips: seq[EnemyShip]
     enemyBullets: seq[Sprite]
     
     shipYMove: float
@@ -252,7 +291,7 @@ proc resetGame() =
 
     moving = false
 
-proc updateAsteroids(asteroids: seq[AsteroidSprite]): seq[AsteroidSprite] =
+proc updateAsteroids(): seq[AsteroidSprite] =
     for a in asteroids:
         let s = a.sprite
 
@@ -263,13 +302,28 @@ proc updateAsteroids(asteroids: seq[AsteroidSprite]): seq[AsteroidSprite] =
         else:
             score -= 1
 
-proc updateEnemyShips(): seq[Sprite] =
-    for s in enemyShips:
-        if s.position.x + (asteroidSize.x / 2).cfloat > 0:
-            s.position = vec2(s.position.x - 5, s.position.y)
-            result.add(s)
+proc updateEnemyShips(): seq[EnemyShip] =
+    for e in enemyShips:
+        let s = e.sprite
+
+        if s.position.x + (enemyShipSize.x / 2).cfloat > 0:
+            s.position = vec2(s.position.x - 3, s.position.y)
+            result.add(e)
+
+            e.cooldown -= 1
+
+            if e.cooldown < 1:
+                e.cooldown = 100
+                enemyBullets.add(newEnemyBullet(e))
         else:
-            score -= 10
+            score -= 20
+
+proc updateEnemyBullets(): seq[Sprite] =
+    for eB in enemyBullets:
+        if eB.position.x + (enemyBulletSize.x / 2).cfloat > 0:
+            eB.position = vec2(eB.position.x - 11, eB.position.y)
+            eB.rotation = (eB.rotation + 180) mod 360
+            result.add(eB)
 
 resetGame()
 music.play()
@@ -307,7 +361,8 @@ while window.open:
 
     window.drawAsteroids(asteroids)
     window.drawSprites(healthPickups)
-    window.drawSprites(enemyShips)
+    window.drawEnemyShips(enemyShips)
+    window.drawSprites(enemyBullets)
     window.drawShip(ship, exhaustSmall, exhaustLarge, moving)
     window.drawSprites(bullets)
     window.drawHealth(health)
@@ -358,15 +413,26 @@ while window.open:
     var
         newBullets = bullets.toHashSet
         newAsteroids = asteroids.toHashSet
+        newEnemyShips = enemyShips.toHashSet
 
-    for a in asteroids:
-        for b in bullets:
+    for b in bullets:
+        for a in asteroids:
             if b.pBulletOverlapsAsteroid(a):
                 newBullets.excl(b)
                 newAsteroids.excl(a)
                 score += 1
+        
+        for e in enemyShips:
+            if b.pBulletOverlapsEnemy(e):
+                newBullets.excl(b)
+                e.health -= 1
+
+                if e.health == 0:
+                    newEnemyShips.excl(e)
+                    score += 10
 
     asteroids = newAsteroids.toSeq
+    enemyShips = newEnemyShips.toSeq
     
     for a in asteroids:
         if ship.pShipOverlapsAsteroid(a):
@@ -388,10 +454,20 @@ while window.open:
 
     healthPickups = newHealthPickups.toSeq
 
+    var newEnemyBullets = enemyBullets.toHashSet
+
+    for eB in enemyBullets:
+        if ship.pShipOverlapsEnemyBullet(eB):
+            health -= 1
+            newEnemyBullets.excl(eB)
+            oofSound.play()
+    
+    enemyBullets = newEnemyBullets.toSeq
     bullets = bullets.updateBullets()
-    asteroids = asteroids.updateAsteroids()
+    asteroids = updateAsteroids()
     healthPickups = healthPickups.updateHealthPickups()
     enemyShips = updateEnemyShips()
+    enemyBullets = updateEnemyBullets()
 
     if abs(shipYMove) > 0.05:
         shipYMove /= 1.2
@@ -407,8 +483,8 @@ while window.open:
     if rand(2048) == 420:
         healthPickups.add(newHealthPickup())
 
-    if rand(2048) == 420:
-        healthPickups.add(newEnemyShip())
+    if rand(512) == 256 and score > 20:
+        enemyShips.add(newEnemyShip())
 
 window.destroy()
 music.stop()
