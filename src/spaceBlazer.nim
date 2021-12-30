@@ -489,3 +489,7 @@ while window.open:
 window.destroy()
 music.stop()
 music.destroy()
+oofSound.stop()
+oofSound.destroy()
+laserSound.stop()
+laserSound.destroy()
