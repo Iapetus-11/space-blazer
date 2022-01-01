@@ -469,13 +469,11 @@ while window.open:
     enemyShips = updateEnemyShips()
     enemyBullets = updateEnemyBullets()
 
-    if abs(shipYMove) > 0.05:
+    if abs(shipYMove) > 0.5:
         shipYMove /= 1.2
-    else:
-        shipYMove = 0
     
-    if abs(shipXMove) > 0.75:
-        shipXMove /= 1.1
+    if abs(shipXMove) > 0.5:
+        shipXMove /= 1.2
 
     if rand(34) == 12:
         asteroids.add(newAsteroid())
