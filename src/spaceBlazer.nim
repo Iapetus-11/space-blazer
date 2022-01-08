@@ -1,4 +1,5 @@
 import std/[random, math, sets, sequtils, hashes]
+import winim/lean except EVENT_TYPE
 import csfml/[audio]
 import csfml
 
@@ -16,12 +17,13 @@ type
 
 const
     BACKGROUND_COLOR = color(30, 30, 40)
-    WINDOW_X: cint = 800
-    WINDOW_Y: cint = 600
 
 let
+    windowY = (GetSystemMetrics(SM_CYSCREEN).toFloat * 0.95).cint
+    windowX = (windowY.toFloat * 1.95).cint
+
     ctxSettings = ContextSettings(antialiasingLevel: 16)
-    window = newRenderWindow(videoMode(WINDOW_X, WINDOW_Y), "StarBlazer Clone", settings = ctxSettings)
+    window = newRenderWindow(videoMode(windowX, windowY), "StarBlazer Clone", settings = ctxSettings)
 
     shipTexture = newTexture("res/ship.png")
     shipSize = shipTexture.size
@@ -82,7 +84,7 @@ proc newAsteroid(): AsteroidSprite =
 
     sprite.origin = vec2(asteroidSize.x / 2, asteroidSize.y / 2)
     sprite.rotation = rand(360).cfloat
-    sprite.position = vec2(WINDOW_X+asteroidSize.x, rand(WINDOW_Y - (asteroidSize.y * 2))+asteroidSize.y)
+    sprite.position = vec2(windowX+asteroidSize.x, rand(windowY - (asteroidSize.y * 2))+asteroidSize.y)
     
     let scale = rand(1) / 1 + 1
 
@@ -94,13 +96,13 @@ proc newHealthPickup(): Sprite =
     result = newSprite(healthPickupTexture)
 
     result.origin = vec2(healthPickupSize.x / 2, healthPickupSize.y / 2)
-    result.position = vec2(WINDOW_X+healthPickupSize.x, rand(WINDOW_Y - (healthPickupSize.y * 2))+healthPickupSize.y)
+    result.position = vec2(windowX+healthPickupSize.x, rand(windowY - (healthPickupSize.y * 2))+healthPickupSize.y)
 
 proc newEnemyShip(): EnemyShip =
     result = EnemyShip(sprite: newSprite(enemyShipTexture), health: 5, cooldown: 50)
 
     result.sprite.origin = vec2(enemyShipSize.x / 2, enemyShipSize.y / 2)
-    result.sprite.position = vec2(WINDOW_X+enemyShipSize.x, rand(WINDOW_Y - (enemyShipSize.y * 2))+enemyShipSize.y)
+    result.sprite.position = vec2(windowX+enemyShipSize.x, rand(windowY - (enemyShipSize.y * 2))+enemyShipSize.y)
 
 proc drawSprites(window: RenderWindow, sprites: seq[Sprite]) =
     for s in sprites:
@@ -112,7 +114,7 @@ proc drawAsteroids(window: RenderWindow, asteroids: seq[AsteroidSprite]) =
 
 proc updateBullets(bullets: seq[Sprite]): seq[Sprite] =
     for b in bullets:
-        if b.position.x < WINDOW_X.toFloat:
+        if b.position.x < windowX.toFloat:
             b.position = vec2(b.position.x + 15, b.position.y)
             result.add(b)
 
@@ -124,7 +126,7 @@ proc updateHealthPickups(healthPickups: seq[Sprite]): seq[Sprite] =
 
 proc drawHealth(window: RenderWindow, health: int) =
     let
-        baseX = WINDOW_X - 15
+        baseX = windowX - 15
         baseY = 20
 
     for i in 0 .. health - 1:
@@ -151,7 +153,7 @@ proc drawGameOver(window: RenderWindow) =
 
     text.color = color(255, 10, 10)
     text.origin = vec2(text.localBounds.width / 2, text.localBounds.height / 2)
-    text.position = vec2(WINDOW_X / 2, WINDOW_Y / 2)
+    text.position = vec2(windowX / 2, windowY / 2)
 
     window.draw(text)
 
@@ -270,7 +272,7 @@ proc resetGame() =
     running = true
 
     ship.origin = vec2(shipSize.x / 2, shipSize.y / 2)
-    ship.position = vec2(WINDOW_X / 3, WINDOW_Y / 2)
+    ship.position = vec2(windowX / 3, windowY / 2)
 
     exhaustLarge.origin = vec2(largeExhaustSize.x.toFloat, largeExhaustSize.y / 2)
     exhaustSmall.origin = vec2(smallExhaustSize.x.toFloat, smallExhaustSize.y / 2)
@@ -346,7 +348,7 @@ while window.open:
                     music.play()
 
             else: discard
-        of EventType.Resized: window.size = vec2(WINDOW_X, WINDOW_Y)
+        of EventType.Resized: window.size = vec2(windowX, windowY)
         else: discard
 
     if running and (music.volume < 80):
@@ -402,10 +404,10 @@ while window.open:
     if bulletLimiter > 0:
         bulletLimiter -= 1
 
-    if ship.position.x + shipXMove < 50 or ship.position.x + shipXMove + (shipTexture.size.x.toFloat / 2.0) > WINDOW_X.toFloat:
+    if ship.position.x + shipXMove < 50 or ship.position.x + shipXMove + (shipTexture.size.x.toFloat / 2.0) > windowX.toFloat:
         shipXMove = 0
 
-    if (ship.position.y + shipYMove - shipTexture.size.y.toFloat/2.0) < 0 or ship.position.y + shipTexture.size.y.toFloat/2 + shipYMove > WINDOW_Y.toFloat:
+    if (ship.position.y + shipYMove - shipTexture.size.y.toFloat/2.0) < 0 or ship.position.y + shipTexture.size.y.toFloat/2 + shipYMove > windowY.toFloat:
         shipYMove = 0
 
     ship.position = vec2(ship.position.x + shipXMove, ship.position.y + shipYMove)
