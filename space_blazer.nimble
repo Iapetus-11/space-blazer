@@ -12,4 +12,3 @@ bin           = @["spaceBlazer"]
 
 requires "nim >= 1.6.0"
 requires "csfml"
-requires "winim"
