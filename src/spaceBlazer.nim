@@ -1,5 +1,4 @@
 import std/[random, math, sets, sequtils, hashes]
-import winim/lean except EVENT_TYPE
 import csfml/[audio]
 import csfml
 
